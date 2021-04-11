@@ -20,21 +20,6 @@ for i in range(len(testData)):
     testLabel[i, np.asarray(mnistTest.targets)[i]] = 1
 
 
-## 컨볼루션 설정
-
-def conv2d(image, kernel, padding='zero'):
-
-    if padding=='zero':
-        out_shape = image.shape
-        image = np.pad(image, round((kernel.shape[0]-1)/2),'constant', constant_values=(0))
-    else :
-        out_shape = np.subtract(image.shape , kernel.shape)
-
-    sub_matrices = np.lib.stride_tricks.as_strided(image,
-                                                   shape=tuple(out_shape) + kernel.shape,
-                                                   strides=image.strides * 2)
-    return np.einsum('ij,klij->kl', kernel, sub_matrices)
-
 ## ReLU 및 Sigmoid 구성
 def leaky_relu(x):
     return np.maximum(0.01*x,x)
@@ -63,32 +48,50 @@ def dtanh(x):
 def softmax(x) :
     exp_x = np.exp(x - np.max(x)) # overflow 방지
     return (exp_x / np.sum(exp_x))
+## 컨볼루션 설정
+
+def conv2d_1ch(image, kernel, padding='zero'):
+    if padding=='zero':
+        out_shape = image.shape
+        image = np.pad(image, round((kernel.shape[0]-1)/2),'constant', constant_values=(0))
+    else :
+        out_shape = np.subtract(image.shape , kernel.shape)
+
+    sub_matrices = np.lib.stride_tricks.as_strided(image,
+                                                   shape=tuple(out_shape) + kernel.shape,
+                                                   strides=image.strides * 2)
+    return np.einsum('ij,klij->kl', kernel, sub_matrices)
+
+def conv2d(image, kernel, padding='zero'):
+    in_ch, out_ch = kernel.shape[0], kernel.shape[1]
+    img_w, img_h = image.shape[-2], image.shape[-1]
+
+    output = np.zeros([out_ch, img_w, img_h])
+
+    for i in range(out_ch): #out ch
+        for j in range(in_ch): #in ch
+            output[i] += conv2d_1ch(image[j], kernel[j,i], padding)
+    return output
 
 ## 네트워크 구성
 class CNN:
     def __init__(self, ch1, ch2):
+        self.ch1 = ch1
+        self.ch2 = ch2
+
         self.conv_layer1 = np.random.randn(1, ch1, 3, 3) #in_ch, out_ch, size
-        self.conv_layer1_b = np.random.randn(1, ch1)
+        self.conv_layer1_b = np.random.randn(ch1)
 
         self.conv_layer2 = np.random.randn(ch1, ch2, 3, 3)
-        self.conv_layer2_b = np.random.randn(1, ch2)
+        self.conv_layer2_b = np.random.randn(ch2)
 
-        self.fcl = np.random.randn(ch2 * 784,10)
+        self.fcl = np.random.randn(ch2 * 784, 10)
 
     def forward(self, input):
         self.x = input
-        self.out1 = np.zeros([1,self.conv_layer1.shape[1], input.shape[0], input.shape[1]])
-        for i in range(self.conv_layer1.shape[1]):
-            self.out1[0,i] = leaky_relu(conv2d(input, self.conv_layer1[0,i,:,:]))# + self.conv_layer1_b[0,i])
-
-        self.out2 = np.zeros([1,self.conv_layer2.shape[1], input.shape[0], input.shape[1]])
-        for i in range(self.conv_layer2.shape[1]):
-            for j in range(self.conv_layer2.shape[0]):
-                self.out2[0,i] += conv2d(self.out1[0,j,:,:], self.conv_layer2[j,i,:,:])
-            self.out2[0,i] = leaky_relu(self.out2[0,i])# + self.conv_layer2_b[0,i])
-
-        self.out3 = softmax(self.out2.reshape(1,-1) @ self.fcl)#[1*15000]@[15000*10]=[1,10]
-
+        self.out1 = leaky_relu(conv2d(input.reshape((1,) + input.shape), self.conv_layer1))
+        self.out2 = leaky_relu(conv2d(self.out1, self.conv_layer2))
+        self.out3 = softmax(self.out2.reshape(1,-1) @ self.fcl)#[1*-1]@[-1*10]=[1,10]
         return self.out3
 
     def backward(self, ans):
