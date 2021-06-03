@@ -118,7 +118,7 @@ def calc_iou(y_bb, pred_bb):
 
     return iou
 ##
-model = CNN_class(28,56,80,108).to(device)
+model = CNN_class(16,32,64,256).to(device)
 
 # define cost/loss & optimizer
 criterion = torch.nn.CrossEntropyLoss().to(device)
@@ -149,7 +149,7 @@ for epoch in range(max_epoch):
 
     for it in range(len(traindata)):
 
-        #model.train()
+        model.train()
         #classification network 학습
         x = traindata.data[it].to(device)
         x = x.unsqueeze(1).permute(1,3,0,2) # batch, channel, w, h순으로 변경
@@ -177,7 +177,7 @@ for epoch in range(max_epoch):
             accu, accu_bb = 0, 0
             # 테스트 정확도 계산
             with torch.no_grad():
-                #model.eval()
+                model.eval()
                 shfl_test = torch.arange(len(testdata))
                 shfl_test = torch.randperm(max(shfl_test))
                 temptd, temptl = {}, {}
